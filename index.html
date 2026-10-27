@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Maze Quest: Year 5 English - Sentence Structure</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #fff; }
+    #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+    
+    /* UI Overlay */
+    .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+    .interactive { pointer-events: auto; }
+    
+    /* HUD Header */
+    #hud { position: absolute; top: 15px; left: 15px; right: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.6); padding: 12px 20px; border-radius: 12px; backdrop-filter: blur(5px); border: 1px solid rgba(255,255,255,0.1); }
+    .hud-title { font-weight: bold; font-size: 1.2rem; color: #4e54c8; text-shadow: 0 0 10px rgba(78,84,200,0.5); }
+    .hud-stats { display: flex; gap: 20px; font-weight: 600; font-size: 1rem; }
+    
+    /* Modals & Dialogs */
+    .modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #16213e; border: 3px solid #0f3460; border-radius: 16px; padding: 25px; width: 90%; max-width: 500px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); display: none; }
+    .modal.active { display: block; }
+    .modal h2 { margin-bottom: 15px; color: #e94560; }
+    .modal p { margin-bottom: 20px; font-size: 1.05rem; line-height: 1.5; color: #e0e0e0; }
+    
+    .btn { background: linear-gradient(135deg, #4e54c8, #8f94fb); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: transform 0.1s, background 0.2s; }
+    .btn:hover { transform: scale(1.05); }
+    .btn:active { transform: scale(0.95); }
+    
+    .input-field { width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #0f3460; background: #0f3460; color: white; font-size: 1rem; margin-bottom: 20px; outline: none; }
+    
+    /* Question Options */
+    .options-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 20px; }
+    .option-btn { background: #0f3460; color: white; border: 2px solid #1f4068; padding: 12px; border-radius: 8px; font-size: 0.95rem; text-align: left; cursor: pointer; transition: background 0.2s; }
+    .option-btn:hover { background: #1f4068; border-color: #4e54c8; }
+    
+    /* Feedback Display */
+    #feedback { margin-top: 15px; font-weight: bold; font-size: 1rem; display: none; padding: 10px; border-radius: 8px; }
+    .feedback-correct { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid #2ecc71; }
+    .feedback-wrong { background: rgba(231, 76, 60, 0.2); color: #e74c3c; border: 1px solid #e74c3c; }
+
+    /* Mobile Controls */
+    #joystick-zone { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); display: none; touch-action: none; }
+    #joystick-knob { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: #4e54c8; border-radius: 50%; opacity: 0.8; }
+    #interact-btn { position: absolute; bottom: 40px; right: 40px; width: 80px; height: 80px; background: #e94560; color: white; border-radius: 50%; display: none; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; border: none; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+
+    @media (max-width: 768px) {
+      #joystick-zone, #interact-btn { display: flex; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <div class="ui-layer">
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hud-title">Maze Quest: Sentence Structure</div>
+      <div class="hud-stats">
+        <div>Stars: <span id="score-display">0</span> / 6</div>
+      </div>
+    </div>
+
+    <!-- Start Modal -->
+    <div id="start-modal" class="modal active interactive">
+      <h2>Welcome Adventurer!</h2>
+      <p>Explore the 3D maze and solve 6 Sentence Structure challenges to unlock the exit chest!</p>
+      <input type="text" id="player-name" class="input-field" placeholder="Enter your name" required>
+      <button class="btn" onclick="startGame()">Start Game</button>
+    </div>
+
+    <!-- Question Modal -->
+    <div id="question-modal" class="modal interactive">
+      <h3 id="q-title" style="color: #4e54c8; margin-bottom: 10px;">Challenge</h3>
+      <p id="q-text" style="font-weight: 600; font-size: 1.1rem;"></p>
+      <div id="options-container" class="options-grid"></div>
+      <div id="feedback"></div>
+      <button id="next-btn" class="btn" style="display: none; width: 100%; margin-top: 10px;" onclick="closeQuestionModal()">Continue</button>
+    </div>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="modal interactive">
+      <h2>🎉 Mission Accomplished!</h2>
+      <p id="victory-summary"></p>
+      <p id="sending-status" style="font-size: 0.9rem; color: #aaa;">Saving results to Google Sheets...</p>
+      <button class="btn" onclick="location.reload()">Play Again</button>
+    </div>
+
+    <!-- Controls for Mobile -->
+    <div id="joystick-zone" class="interactive">
+      <div id="joystick-knob"></div>
+    </div>
+    <button id="interact-btn" class="interactive" onclick="checkInteraction()">ACTION</button>
+  </div>
+
+  <script>
+    // --- CONFIGURATION ---
+    const APPS_SCRIPT_URL = "YOUR_APPS_SCRIPT_URL_HERE"; // Gantikan dengan URL Apps Script anda!
+
+    // --- QUESTION BANK (YEAR 5 SENTENCE STRUCTURE) ---
+    const questions = [
+      {
+        id: 1,
+        question: "Select the correct sentence with proper capitalization and punctuation:",
+        options: [
+          "every Sunday, Adam plays football at the park.",
+          "Every Sunday, adam plays football at the park",
+          "Every Sunday, Adam plays football at the park."
+        ],
+        answer: 2,
+        feedback: "Correct! Days of the week and proper names must begin with a capital letter, and sentences end with a period."
+      },
+      {
+        id: 2,
+        question: "Choose the sentence with the correct Subject-Verb Agreement:",
+        options: [
+          "The children is swimming in the pool.",
+          "The children are swimming in the pool.",
+          "The children am swimming in the pool."
+        ],
+        answer: 1,
+        feedback: "Great job! 'Children' is a plural noun, so it takes the plural verb 'are'."
+      },
+      {
+        id: 3,
+        question: "Rearrange into a complete sentence: [ delicious / baked / a / cake / Mother ]",
+        options: [
+          "Mother baked a cake delicious.",
+          "Mother baked a delicious cake.",
+          "A delicious cake Mother baked."
+        ],
+        answer: 1,
+        feedback: "Spot on! The correct word order is Subject (Mother) + Verb (baked) + Object (a delicious cake)."
+      },
+      {
+        id: 4,
+        question: "Identify the correct conjunction to join the sentences: 'He was tired. He finished his homework.'",
+        options: [
+          "He was tired, but he finished his homework.",
+          "He was tired, so he finished his homework.",
+          "He was tired, or he finished his homework."
+        ],
+        answer: 0,
+        feedback: "Excellent! 'But' connects two contrasting ideas."
+      },
+      {
+        id: 5,
+        question: "Which sentence correctly uses an adjective before a noun?",
+        options: [
+          "She bought a pair of shoes blue.",
+          "She bought a blue pair of shoes.",
+          "She bought pair blue of shoes."
+        ],
+        answer: 1,
+        feedback: "Well done! Adjectives usually come before the noun they describe."
+      },
+      {
+        id: 6,
+        question: "Which of the following is a complete sentence (not a fragment)?",
+        options: [
+          "Running quickly towards the bus stop.",
+          "Because he forgot his keys.",
+          "The teacher explained the lesson clearly."
+        ],
+        answer: 2,
+        feedback: "Perfect! A complete sentence has both a subject ('The teacher') and a predicate ('explained the lesson clearly')."
+      }
+    ];
+
+    // --- GAME STATE ---
+    let playerName = "";
+    let score = 0;
+    let answeredQuestions = new Set();
+    let activeObjectiveIndex = null;
+
+    // --- THREE.JS ENGINE SETUP ---
+    let scene, camera, renderer;
+    let player, walls = [], objectiveObjects = [];
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let joystickVector = { x: 0, y: 0 };
+
+    function init3D() {
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a2e);
+      scene.fog = new THREE.FogExp2(0x1a1a2e, 0.05);
+
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      container.appendChild(renderer.domElement);
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(20, 40, 20);
+      dirLight.castShadow = true;
+      scene.add(dirLight);
+
+      // Player Block
+      const playerGeo = new THREE.BoxGeometry(1, 2, 1);
+      const playerMat = new THREE.MeshStandardMaterial({ color: 0x4e54c8 });
+      player = new THREE.Mesh(playerGeo, playerMat);
+      player.position.set(2, 1, 2);
+      scene.add(player);
+
+      buildMaze();
+      setupControls();
+
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    // Maze Layout (Simple 3D grid layout)
+    function buildMaze() {
+      const wallMat = new THREE.MeshStandardMaterial({ color: 0x0f3460 });
+      const floorMat = new THREE.MeshStandardMaterial({ color: 0x16213e });
+
+      // Floor
+      const floorGeo = new THREE.PlaneGeometry(30, 30);
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.set(12, 0, 12);
+      scene.add(floor);
+
+      // Simple grid outer walls
+      const mazeGrid = [
+        [1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,0,1,0,1,0,1,0,1],
+        [1,0,1,0,0,0,1,0,1],
+        [1,1,1,1,1,0,1,1,1],
+        [1,0,0,0,1,0,0,0,1],
+        [1,0,1,0,1,1,1,0,1],
+        [1,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1]
+      ];
+
+      const wallGeo = new THREE.BoxGeometry(3, 3, 3);
+      for(let r = 0; r < mazeGrid.length; r++) {
+        for(let c = 0; c < mazeGrid[r].length; c++) {
+          if(mazeGrid[r][c] === 1) {
+            const wall = new THREE.Mesh(wallGeo, wallMat);
+            wall.position.set(c * 3, 1.5, r * 3);
+            scene.add(wall);
+            walls.push(wall);
+          }
+        }
+      }
+
+      // Add 6 Interactive Objective Spheres
+      const objPositions = [
+        {x: 3, z: 3}, {x: 21, z: 3}, {x: 9, z: 9},
+        {x: 21, z: 15}, {x: 3, z: 21}, {x: 18, z: 21}
+      ];
+
+      objPositions.forEach((pos, index) => {
+        const geo = new THREE.SphereGeometry(0.8, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xe94560, emissive: 0x550011 });
+        const sphere = new THREE.Mesh(geo, mat);
+        sphere.position.set(pos.x, 1, pos.z);
+        sphere.userData = { id: index };
+        scene.add(sphere);
+        objectiveObjects.push(sphere);
+      });
+    }
+
+    // Controls
+    function setupControls() {
+      document.addEventListener('keydown', (e) => {
+        if(e.key === 'w' || e.key === 'ArrowUp') moveForward = true;
+        if(e.key === 's' || e.key === 'ArrowDown') moveBackward = true;
+        if(e.key === 'a' || e.key === 'ArrowLeft') moveLeft = true;
+        if(e.key === 'd' || e.key === 'ArrowRight') moveRight = true;
+        if(e.key === 'e' || e.key === ' ') checkInteraction();
+      });
+
+      document.addEventListener('keyup', (e) => {
+        if(e.key === 'w' || e.key === 'ArrowUp') moveForward = false;
+        if(e.key === 's' || e.key === 'ArrowDown') moveBackward = false;
+        if(e.key === 'a' || e.key === 'ArrowLeft') moveLeft = false;
+        if(e.key === 'd' || e.key === 'ArrowRight') moveRight = false;
+      });
+
+      // Mobile Touch Joystick
+      const joystickZone = document.getElementById('joystick-zone');
+      const knob = document.getElementById('joystick-knob');
+      let touchId = null;
+
+      joystickZone.addEventListener('touchstart', (e) => {
+        const touch = e.changedTouches[0];
+        touchId = touch.identifier;
+      });
+
+      joystickZone.addEventListener('touchmove', (e) => {
+        for(let touch of e.changedTouches) {
+          if(touch.identifier === touchId) {
+            const rect = joystickZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.min(Math.hypot(dx, dy), 40);
+            const angle = Math.atan2(dy, dx);
+            
+            knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+            joystickVector.x = (Math.cos(angle)*dist) / 40;
+            joystickVector.y = (Math.sin(angle)*dist) / 40;
+          }
+        }
+      });
+
+      const resetJoystick = () => {
+        touchId = null;
+        knob.style.transform = 'translate(0px, 0px)';
+        joystickVector = { x: 0, y: 0 };
+      };
+
+      joystickZone.addEventListener('touchend', resetJoystick);
+      joystickZone.addEventListener('touchcancel', resetJoystick);
+    }
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Movement logic
+      const speed = 0.12;
+      let dx = 0, dz = 0;
+
+      if (moveForward) dz -= speed;
+      if (moveBackward) dz += speed;
+      if (moveLeft) dx -= speed;
+      if (moveRight) dx += speed;
+
+      if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+        dx = joystickVector.x * speed;
+        dz = joystickVector.y * speed;
+      }
+
+      // Simple collision check
+      const nextX = player.position.x + dx;
+      const nextZ = player.position.z + dz;
+      let collide = false;
+
+      for (let wall of walls) {
+        if (Math.abs(wall.position.x - nextX) < 1.8 && Math.abs(wall.position.z - nextZ) < 1.8) {
+          collide = true;
+          break;
+        }
+      }
+
+      if (!collide) {
+        player.position.x = nextX;
+        player.position.z = nextZ;
+      }
+
+      // Camera follow
+      camera.position.set(player.position.x, player.position.y + 8, player.position.z + 8);
+      camera.lookAt(player.position);
+
+      // Rotate Spheres
+      objectiveObjects.forEach(obj => {
+        obj.rotation.y += 0.02;
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    // --- GAME LOGIC ---
+    function startGame() {
+      const nameInput = document.getElementById('player-name').value.trim();
+      if (!nameInput) {
+        alert("Please enter your name to begin.");
+        return;
+      }
+      playerName = nameInput;
+      document.getElementById('start-modal').classList.remove('active');
+    }
+
+    function checkInteraction() {
+      objectiveObjects.forEach(obj => {
+        const dist = player.position.distanceTo(obj.position);
+        if (dist < 2.5 && !answeredQuestions.has(obj.userData.id)) {
+          openQuestionModal(obj.userData.id);
+        }
+      });
+    }
+
+    function openQuestionModal(index) {
+      activeObjectiveIndex = index;
+      const q = questions[index];
+      document.getElementById('q-title').innerText = `Challenge ${index + 1} of 6`;
+      document.getElementById('q-text').innerText = q.question;
+      
+      const optionsContainer = document.getElementById('options-container');
+      optionsContainer.innerHTML = '';
+      
+      q.options.forEach((opt, optIdx) => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = opt;
+        btn.onclick = () => submitAnswer(optIdx);
+        optionsContainer.appendChild(btn);
+      });
+
+      document.getElementById('feedback').style.display = 'none';
+      document.getElementById('next-btn').style.display = 'none';
+      document.getElementById('question-modal').classList.add('active');
+    }
+
+    function submitAnswer(selectedIdx) {
+      const q = questions[activeObjectiveIndex];
+      const feedbackEl = document.getElementById('feedback');
+      const optionBtns = document.querySelectorAll('.option-btn');
+
+      optionBtns.forEach(btn => btn.style.pointerEvents = 'none');
+
+      if (selectedIdx === q.answer) {
+        score++;
+        document.getElementById('score-display').innerText = score;
+        feedbackEl.className = 'feedback-correct';
+        feedbackEl.innerText = q.feedback;
+        objectiveObjects[activeObjectiveIndex].material.color.setHex(0x2ecc71);
+        answeredQuestions.add(activeObjectiveIndex);
+      } else {
+        feedbackEl.className = 'feedback-wrong';
+        feedbackEl.innerText = `Incorrect. ${q.feedback}`;
+        answeredQuestions.add(activeObjectiveIndex);
+      }
+
+      feedbackEl.style.display = 'block';
+      document.getElementById('next-btn').style.display = 'block';
+    }
+
+    function closeQuestionModal() {
+      document.getElementById('question-modal').classList.remove('active');
+      if (answeredQuestions.size === questions.length) {
+        finishGame();
+      }
+    }
+
+    function finishGame() {
+      document.getElementById('victory-modal').classList.add('active');
+      document.getElementById('victory-summary').innerText = 
+        `Great job, ${playerName}! You scored ${score} out of 6 stars.`;
+
+      // Post results to Google Sheets
+      if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== "YOUR_APPS_SCRIPT_URL_HERE") {
+        fetch(APPS_SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerName: playerName,
+            score: score,
+            totalQuestions: questions.length
+          })
+        }).then(() => {
+          document.getElementById('sending-status').innerText = "✅ Result recorded in Google Sheets!";
+        }).catch(err => {
+          document.getElementById('sending-status').innerText = "⚠️ Failed to record result.";
+        });
+      } else {
+        document.getElementById('sending-status').innerText = "⚠️ Google Sheets URL not configured.";
+      }
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // Initialize 3D world on load
+    window.onload = init3D;
+  </script>
+</body>
+</html>
